@@ -5,6 +5,8 @@ package main
 import (
   "os"
   "fmt"
+  "bufio"
+  "strings"
   "crypto/md5"
 
   "github.com/spf13/cobra"
@@ -130,7 +132,65 @@ func main() {
         } else {
           // otherwise, determine if read or write operation
           // against queue
-          if len(args) == 1 {
+          var messages []string
+
+          stat, _ := os.Stdin.Stat()
+          if (stat.Mode() & os.ModeCharDevice) == 0 {
+            logger.Info().
+              Str("name", args[0]).
+              Int("key", int(key)).
+              Str("mechanism", "stdin").
+              Msg("Preparing write operation")
+
+
+            in := bufio.NewScanner(os.Stdin)
+            for in.Scan() {
+              message := strings.TrimSpace(in.Text())
+              messages = append(messages, message)
+              logger.Info().
+                Str("name", args[0]).
+                Int("key", int(key)).
+                Str("line", message).
+                Msg("Read from STDIN")
+            }
+            if in.Err() != nil {
+              logger.Info().
+                Str("name", args[0]).
+                Int("key", int(key)).
+                Str("error", fmt.Sprint(in.Err())).
+                Msg("Encountered an error while reading from STDIN")
+            }
+          } else if len(args) == 2 {
+              logger.Info().
+                Str("name", args[0]).
+                Int("key", int(key)).
+                Str("mechanism", "argument").
+                Msg("Preparing write operation")
+              messages = append(messages, args[1])
+          }
+
+          if len(messages) > 0 {
+            // we are performing a write operations against
+            // message slice
+            for _, m := range messages {
+              logger.Info().
+                Str("name", args[0]).
+                Int("key", int(key)).
+                Str("message", m).
+                Msg("Performing write operation")
+
+              err := mq.SendString(m, 1, 0)
+              if err != nil {
+                logger.Error().
+                  Str("name", args[0]).
+                  Int("key", int(key)).
+                  Str("message", m).
+                  Msg("Failed to send message")
+                os.Exit(ExitStatusSysvWrite)
+              }
+            }
+
+          } else if len(args) == 1 {
             // we are performing a read operation
             logger.Info().
               Str("name", args[0]).
@@ -151,28 +211,12 @@ func main() {
             // write message to stdout
             fmt.Println(message)
 
-          } else if len(args) == 2 {
-            // we are performing a write operation
-            logger.Info().
-              Str("name", args[0]).
-              Int("key", int(key)).
-              Str("payload", args[1]).
-              Msg("Performing write operation")
-
-            err := mq.SendString(args[1], 1, 0)
-            if err != nil {
-              logger.Error().
-                Str("name", args[0]).
-                Int("key", int(key)).
-                Str("payload", args[1]).
-                Msg("Failed to send message")
-              os.Exit(ExitStatusSysvWrite)
-            }
-
           } else {
             // log wasted arguments - this can be useful when
             // interacting with the binary from a shell environment
             logger.Error().
+              Str("name", args[0]).
+              Int("key", int(key)).
               Str("args", fmt.Sprint(args)).
               Msg("Too many messages")
             os.Exit(ExitStatusArgument)

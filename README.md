@@ -50,12 +50,17 @@ Message Queues:
 q 393216 0x2a042aa4 --rw-rw---- christiancalloway    staff      3      1
 ```
 
-\* Read from queue `asdf`.
+\* Write to queue `asdf` from stdin and read.
 
 ```bash
-$ ./build/mq asdf one
+$ cat <<eof | ./build/mq asdf
+> one
+> two
+eof
 $ ./build/mq asdf
 one
+$ ./build/mq asdf
+two
 $ echo $?
 0
 ```
