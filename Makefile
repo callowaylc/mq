@@ -5,7 +5,7 @@ PREFIX ?= ./build
 VERSION := 1.11
 TAG = $(shell date -u +'%Y.%m.%d-%H')
 ORG = callowaylc
-REPO = logger
+REPO = mq
 ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 
 -include .env
@@ -15,16 +15,7 @@ export
 
 make:
 	mkdir -p ./build
-	#rm -rf ./build/*
-
-	docker run \
-		--rm \
-		-e GOOS=$(OS) \
-		-e GOARCH=$(ARCH) \
-		-v `pwd`:/opt/bin \
-		-v `pwd`/build/cache:/go/pkg \
-		-w /opt/bin golang:$(VERSION) \
-			go build -v -o ./release/mq-$(OS)-$(ARCH) ./cmd/mq.go; \
+	vgo build -v -o ./release/mq-$(OS)-$(ARCH) ./cmd/mq.go
 
 install:
 	mv ./build/logger-$(OS)-$(ARCH) $(PREFIX)/logger
