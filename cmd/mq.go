@@ -39,6 +39,7 @@ func main() {
 
   var fcount bool
   var fdelete bool
+  var fdump bool
 
   root := &cobra.Command{
     Use: "mq key [value]",
@@ -191,25 +192,46 @@ func main() {
             }
 
           } else if len(args) == 1 {
-            // we are performing a read operation
+
+            // otherwise we are performing a dequeue'ing
+            // operation
             logger.Info().
               Str("name", args[0]).
               Int("key", int(key)).
-              Msg("Performing read operation")
+              Msg("Performing a dequeue operation")
 
-            message, mtype, err := mq.ReceiveString(1, 0)
-            if err != nil {
-              logger.Error().
-                Str("name", args[0]).
-                Int("key", int(key)).
-                Int("type", mtype).
-                Str("error", err.Error()).
-                Msg("Failed to read message")
-              os.Exit(ExitStatusSysvRead)
+            var count uint64 = 1
+            if fdump {
+              // if dump has been passed we dump all messages
+              // to stdout and delete queue
+              count, err = mq.Count()
+              if err != nil {
+                logger.Error().
+                  Str("name", args[0]).
+                  Int("key", int(key)).
+                  Str("error", err.Error()).
+                  Msg("Failed to get queue count")
+                os.Exit(ExitStatusSysv)
+              }
+              defer mq.Destroy()
             }
 
-            // write message to stdout
-            fmt.Println(message)
+            for counter := 0; counter < int(count); counter++ {
+              message, mtype, err := mq.ReceiveString(1, 0)
+              if err != nil {
+                logger.Error().
+                  Str("name", args[0]).
+                  Int("key", int(key)).
+                  Int("type", mtype).
+                  Str("error", err.Error()).
+                  Msg("Failed to read message")
+                os.Exit(ExitStatusSysvRead)
+              }
+
+              // write message to stdout
+              fmt.Println(message)
+            }
+
 
           } else {
             // log wasted arguments - this can be useful when
@@ -238,6 +260,9 @@ func main() {
   )
   root.PersistentFlags().BoolVarP(
     &fdelete, "delete", "d", false, "Delete the queue",
+  )
+  root.PersistentFlags().BoolVarP(
+    &fdump, "dump", "", false, "Dump and delete the queue",
   )
   root.Execute()
 }
