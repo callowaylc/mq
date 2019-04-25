@@ -1,0 +1,8 @@
+github.com/rs/zerolog v1.14.0 h1:F2F6pGdMrQHGPwr05uwcQNSiWnX5PD76SWw/mYvRBXs=
+github.com/rs/zerolog v1.14.0/go.mod h1:YbFCdg8HfsridGWAh22vktObvhZbQsZXe4/zB0OKkWU=
+github.com/siadat/ipc v0.0.0-20181211174419-53c7509e3b7e h1:2Fd9Bi9Du11lbNpFTjwog3luh3oQzoZAdB02aisVG4o=
+github.com/siadat/ipc v0.0.0-20181211174419-53c7509e3b7e/go.mod h1:r7S4zcX5lAZimHYQWLmaeFanbXcGCi6JDBvRq+x/Dsw=
+github.com/spf13/cobra v0.0.3 h1:ZlrZ4XsMRm04Fr5pSFxBgfND2EBVa1nLpiy1stUsX/8=
+github.com/spf13/cobra v0.0.3/go.mod h1:1l0Ry5zgKvJasoi3XT1TypsSe7PqH0Sj9dhYf7v3XqQ=
+github.com/spf13/pflag v1.0.3 h1:zPAT6CGy6wXeQ7NtTnaTerfKOsV6V6F8agHXFiazDkg=
+github.com/spf13/pflag v1.0.3/go.mod h1:DYY7MBk1bdzusC3SYhjObp+wFpr4gzcvqqNjLnInEg4=
