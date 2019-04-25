@@ -1,3 +1,5 @@
+github.com/Shopify/sysv_mq v0.0.0-20181115095215-ed2aeada8228 h1:Q4PnGntQR5IQsHGK0ONFvyxR6+h3o7JouBlaTbrRpAw=
+github.com/Shopify/sysv_mq v0.0.0-20181115095215-ed2aeada8228/go.mod h1:tKgGxRErhsTG3Z2U4uXv5rqhhilYnCDC0r/ETjQ3Q+Y=
 github.com/rs/zerolog v1.14.0 h1:F2F6pGdMrQHGPwr05uwcQNSiWnX5PD76SWw/mYvRBXs=
 github.com/rs/zerolog v1.14.0/go.mod h1:YbFCdg8HfsridGWAh22vktObvhZbQsZXe4/zB0OKkWU=
 github.com/siadat/ipc v0.0.0-20181211174419-53c7509e3b7e h1:2Fd9Bi9Du11lbNpFTjwog3luh3oQzoZAdB02aisVG4o=

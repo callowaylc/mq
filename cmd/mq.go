@@ -5,11 +5,11 @@ package main
 import (
   "os"
   "fmt"
-  "C"
+  "crypto/md5"
 
   "github.com/spf13/cobra"
+  "github.com/Shopify/sysv_mq"
   "github.com/siadat/ipc"
-
 
   "github.com/callowaylc/mq/pkg"
   "github.com/callowaylc/mq/pkg/log"
@@ -21,6 +21,7 @@ const ExitStatusArgument int = 3
 const ExitStatusSysv int = 40
 const ExitStatusSysvRead int = 41
 const ExitStatusSysvWrite int = 42
+const LeastSignificantId uint64 = 42
 
 
 // main /////////////////////////////////////////
@@ -34,7 +35,7 @@ func main() {
   logger.Info().Msg("Enter")
   defer logger.Info().Msg("Exit")
 
-  var fsizef bool
+  var fcount bool
   var fdelete bool
 
   root := &cobra.Command{
@@ -50,71 +51,81 @@ func main() {
       defer logger.Info().Msg("Exit")
 
       if len(args) >= 1 {
-        key, err := ipc.Ftok(args[0], 42)
+        key, err := determineKey(args[0])
         if err != nil {
           logger.Error().
-            Str("path", args[0]).
+            Str("name", args[0]).
+            Int("key", int(key)).
             Str("error", err.Error()).
             Msg("Failed to generate key")
           os.Exit(ExitStatusArgument)
         }
         logger.Info().
-          Int64("key", int64(key)).
-          Str("path", args[0]).
+          Str("name", args[0]).
+          Int("key", int(key)).
           Msg("Created IPC key")
 
         // attempt to create queue
-        qid, err := ipc.Msgget(key, ipc.IPC_CREAT)
+        mq, err := sysv_mq.NewMessageQueue(&sysv_mq.QueueConfig{
+          Key:     int(key),
+          MaxSize: 1024,
+          Mode:    sysv_mq.IPC_CREAT | 0660,
+        })
         if err != nil {
           logger.Error().
-            Str("path", args[0]).
-            Int64("qid", int64(qid)).
+            Str("name", args[0]).
+            Int("key", int(key)).
             Str("error", err.Error()).
-            Msg("Failed to create queue")
+            Msg("Failed to determine message queue")
           os.Exit(ExitStatusArgument)
         }
         logger.Info().
-          Int64("qid", int64(qid)).
-          Msg("Obtained queue identifier")
+          Str("name", args[0]).
+          Int("key", int(key)).
+          Msg("Determined message queue")
 
         if fdelete {
           logger.Info().
-            Int64("qid", int64(qid)).
-            Str("path", args[0]).
+            Str("name", args[0]).
+            Int("key", int(key)).
             Msg("Signal queue deletion")
 
           // if delete flag has been specified, defer deltion
           defer func() {
-            err := ipc.Msgctl(qid, ipc.IPC_RMID)
+            err := mq.Destroy()
             if err != nil {
               logger.Error().
-                Int64("qid", int64(qid)).
-                Str("path", args[0]).
+                Str("name", args[0]).
+                Int("key", int(key)).
                 Str("error", err.Error()).
                 Msg("Failed to delete queue")
               os.Exit(ExitStatusSysv)
             }
             logger.Info().
-              Int64("qid", int64(qid)).
-              Str("path", args[0]).
+              Str("name", args[0]).
+              Int("key", int(key)).
               Msg("Queue deleted")
           }()
 
-        } else if fsize {
-          mqds := C.struct_msqid_ds{}
-          rc, err := C.msgctl(C.int(qid), C.IPC_STAT, &mqds)
+        } else if fcount {
+          // Performing queue count
+          logger.Info().
+            Str("name", args[0]).
+            Int("key", int(key)).
+            Msg("Performing count operation")
 
-          if rc == -1 {
+          count, err := mq.Count()
+          if err != nil {
             logger.Error().
-              Int64("qid", int64(qid)).
-              Str("path", args[0]).
-              Str("error", "Failed something").
-              Msg("Failed to stat queue")
+              Str("name", args[0]).
+              Int("key", int(key)).
+              Str("error", err.Error()).
+              Msg("Failed to get queue count")
             os.Exit(ExitStatusSysv)
           }
 
-          fmt.Println(mqds.msg_qnum)
-
+          // write count to stdout
+          fmt.Println(count)
 
         } else {
           // otherwise, determine if read or write operation
@@ -122,36 +133,38 @@ func main() {
           if len(args) == 1 {
             // we are performing a read operation
             logger.Info().
-              Int64("qid", int64(qid)).
-              Str("path", args[0]).
+              Str("name", args[0]).
+              Int("key", int(key)).
               Msg("Performing read operation")
 
-              msg := &ipc.Msgbuf{Mtype: 12}
-              err := ipc.Msgrcv(qid, msg, 0)
-              if err != nil {
-                logger.Error().
-                  Str("error", err.Error()).
-                  Msg("Failed to read message")
-                os.Exit(ExitStatusSysvRead)
-              }
+            message, mtype, err := mq.ReceiveString(1, 0)
+            if err != nil {
+              logger.Error().
+                Str("name", args[0]).
+                Int("key", int(key)).
+                Int("type", mtype).
+                Str("error", err.Error()).
+                Msg("Failed to read message")
+              os.Exit(ExitStatusSysvRead)
+            }
 
-              // write message to stdout
-              fmt.Println(string(msg.Mtext))
+            // write message to stdout
+            fmt.Println(message)
 
           } else if len(args) == 2 {
             // we are performing a write operation
             logger.Info().
-              Int64("qid", int64(qid)).
-              Str("path", args[0]).
+              Str("name", args[0]).
+              Int("key", int(key)).
               Str("payload", args[1]).
               Msg("Performing write operation")
 
-
-            msg := &ipc.Msgbuf{Mtype: 12, Mtext: []byte(args[1])}
-            err := ipc.Msgsnd(qid, msg, 0)
+            err := mq.SendString(args[1], 1, 0)
             if err != nil {
               logger.Error().
-                Str("error", err.Error()).
+                Str("name", args[0]).
+                Int("key", int(key)).
+                Str("payload", args[1]).
                 Msg("Failed to send message")
               os.Exit(ExitStatusSysvWrite)
             }
@@ -159,14 +172,6 @@ func main() {
           } else {
             // log wasted arguments - this can be useful when
             // interacting with the binary from a shell environment
-            err := ipc.Msgctl(qid, ipc.IPC_STAT)
-            if err != nil {
-              logger.Error().
-                Str("error", err.Error()).
-                Msg("Uhhok")
-              os.Exit(ExitStatusSysv)
-            }
-
             logger.Error().
               Str("args", fmt.Sprint(args)).
               Msg("Too many messages")
@@ -185,10 +190,45 @@ func main() {
   }
 
   root.PersistentFlags().BoolVarP(
-    &fid, "size", "s", false, "Queue size",
+    &fcount, "count", "c", false, "Number of messages in the queue",
   )
   root.PersistentFlags().BoolVarP(
-    &fdelete, "delete", "d", false, "Delete queue",
+    &fdelete, "delete", "d", false, "Delete the queue",
   )
   root.Execute()
+}
+
+func determineKey(name string) (uint64, error) {
+  // create sysv ipc key
+  logger := log.Logger(pkg.Trace("main.key", "main"))
+  logger.Info().
+    Str("name", name).
+    Msg("Enter")
+  defer logger.Info().Msg("Exit")
+
+  // get md5 sum of name, to avoid collisions with
+  // existing tmpdir files
+  hash := fmt.Sprintf("%x", md5.Sum([]byte(name)))
+  logger.Info().
+    Str("name", name).
+    Str("hash", hash).
+    Msg("Determined md5 hash of name")
+
+  // create a seed file required to create an ipc
+  // int
+  path := fmt.Sprintf("%s/mq-%s", os.TempDir(), hash)
+  seed, err := os.Create(path)
+  if err != nil {
+    return 0, err
+  }
+  defer func() {
+    seed.Close()
+  }()
+
+  logger.Info().
+    Str("path", path).
+    Msg("Create seed file")
+
+  // https://github.com/siadat/ipc/blob/master/ftok.go
+  return ipc.Ftok(path, LeastSignificantId)
 }

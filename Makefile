@@ -15,7 +15,7 @@ export
 
 make:
 	mkdir -p ./build
-	rm -rf ./build/*
+	#rm -rf ./build/*
 
 	docker run \
 		--rm \
