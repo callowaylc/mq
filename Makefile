@@ -15,7 +15,20 @@ export
 
 make:
 	mkdir -p ./build
-	vgo build -v -o ./release/mq-$(OS)-$(ARCH) ./cmd/mq.go
+	#rm -rf ./build/*
+
+	- test "$(OS)" = "linux" && docker run \
+			--rm \
+			-e GOOS=$(OS) \
+			-e GOARCH=$(ARCH) \
+			-v `pwd`:/opt/bin \
+			-v `pwd`/build/cache:/go/pkg \
+			-w /opt/bin golang:$(VERSION) \
+				go build -v -o ./release/mq-$(OS)-$(ARCH) ./cmd/mq.go
+
+	- test "$(OS)" = "darwin" && \
+			vgo build -v -o ./release/mq-$(OS)-$(ARCH) ./cmd/mq.go
+
 
 install:
 	mv ./build/logger-$(OS)-$(ARCH) $(PREFIX)/logger
