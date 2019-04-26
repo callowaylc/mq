@@ -23,6 +23,7 @@ const ExitStatusArgument int = 3
 const ExitStatusSysv int = 40
 const ExitStatusSysvRead int = 41
 const ExitStatusSysvWrite int = 42
+const ExitStatusSysvStat int = 43
 const LeastSignificantId uint64 = 42
 
 
@@ -108,6 +109,23 @@ func main() {
               Str("name", args[0]).
               Int("key", int(key)).
               Msg("Queue deleted")
+
+            path := seedFile(args[0])
+            err = os.Remove(path)
+            if err != nil {
+              logger.Error().
+                Str("name", args[0]).
+                Int("key", int(key)).
+                Str("error", err.Error()).
+                Msg("Failed to delete seed file")
+              os.Exit(ExitStatusSysv)
+            }
+            logger.Info().
+              Str("name", args[0]).
+              Int("key", int(key)).
+              Str("path", path).
+              Msg("Deleted seed file")
+
           }()
 
         } else if fcount {
@@ -213,7 +231,6 @@ func main() {
                   Msg("Failed to get queue count")
                 os.Exit(ExitStatusSysv)
               }
-              defer mq.Destroy()
             }
 
             for counter := 0; counter < int(count); counter++ {
@@ -232,7 +249,6 @@ func main() {
               fmt.Println(message)
             }
 
-
           } else {
             // log wasted arguments - this can be useful when
             // interacting with the binary from a shell environment
@@ -240,7 +256,7 @@ func main() {
               Str("name", args[0]).
               Int("key", int(key)).
               Str("args", fmt.Sprint(args)).
-              Msg("Too many messages")
+              Msg("Unexpected arguments")
             os.Exit(ExitStatusArgument)
           }
         }
@@ -269,23 +285,13 @@ func main() {
 
 func determineKey(name string) (uint64, error) {
   // create sysv ipc key
-  logger := log.Logger(pkg.Trace("main.key", "main"))
+  logger := log.Logger(pkg.Trace("main.determineKey", "main"))
   logger.Info().
     Str("name", name).
     Msg("Enter")
   defer logger.Info().Msg("Exit")
 
-  // get md5 sum of name, to avoid collisions with
-  // existing tmpdir files
-  hash := fmt.Sprintf("%x", md5.Sum([]byte(name)))
-  logger.Info().
-    Str("name", name).
-    Str("hash", hash).
-    Msg("Determined md5 hash of name")
-
-  // create a seed file required to create an ipc
-  // int
-  path := fmt.Sprintf("%s/mq-%s", os.TempDir(), hash)
+  path := seedFile(name)
   seed, err := os.Create(path)
   if err != nil {
     return 0, err
@@ -300,4 +306,25 @@ func determineKey(name string) (uint64, error) {
 
   // https://github.com/siadat/ipc/blob/master/ftok.go
   return ipc.Ftok(path, LeastSignificantId)
+}
+
+func seedFile(name string) string {
+  // a seed file required for generating an mq id
+  logger := log.Logger(pkg.Trace("main.seedFile", "main"))
+  logger.Info().
+    Str("name", name).
+    Msg("Enter")
+
+  // get md5 sum of name, to avoid collisions with
+  // existing tmpdir files
+  hash := fmt.Sprintf("%x", md5.Sum([]byte(name)))
+  logger.Info().
+    Str("name", name).
+    Str("hash", hash).
+    Msg("Determined md5 hash of name")
+
+  // create a seed file required to create an ipc
+  // int
+  path := fmt.Sprintf("%s/mq-%s", os.TempDir(), hash)
+  return path
 }
