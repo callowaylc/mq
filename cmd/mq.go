@@ -19,11 +19,16 @@ import (
 
 // constants ////////////////////////////////////
 
-const ExitStatusArgument int = 3
+const ExitStatusArgument int = 30
+const ExitStatusArgumentStdin int = 31
 const ExitStatusSysv int = 40
 const ExitStatusSysvRead int = 41
 const ExitStatusSysvWrite int = 42
 const ExitStatusSysvStat int = 43
+const ExitStatusSysvDelete int = 44
+const ExitStatusSysvCount int = 45
+
+
 const LeastSignificantId uint64 = 42
 
 
@@ -81,147 +86,176 @@ func main() {
             Int("key", int(key)).
             Str("error", err.Error()).
             Msg("Failed to determine message queue")
-          os.Exit(ExitStatusArgument)
+          os.Exit(ExitStatusSysv)
         }
         logger.Info().
           Str("name", args[0]).
           Int("key", int(key)).
           Msg("Determined message queue")
 
-        if fdelete {
+
+        // otherwise, determine if read or write operation
+        // against queue
+        messages  := []string{}
+        stat, err := os.Stdin.Stat()
+        if err != nil {
+          logger.Error().
+            Str("name", args[0]).
+            Int("key", int(key)).
+            Str("mechanism", "stdin").
+            Msg("Failed to stat stdin")
+        }
+
+        //if (stat.Mode() & os.ModeCharDevice) == 0 {
+        if err == nil && stat.Size() > 0 {
+          // NOTE: when tty isnt attached,
           logger.Info().
             Str("name", args[0]).
             Int("key", int(key)).
-            Msg("Signal queue deletion")
+            Str("mechanism", "stdin").
+            Int("size", int(stat.Size())).
+            Msg("Preparing write operation")
 
-          // if delete flag has been specified, defer deltion
-          defer func() {
-            err := mq.Destroy()
+          in := bufio.NewScanner(os.Stdin)
+          for in.Scan() {
+            message := strings.TrimSpace(in.Text())
+            messages = append(messages, message)
+            logger.Info().
+              Str("name", args[0]).
+              Int("key", int(key)).
+              Str("line", message).
+              Msg("Read from STDIN")
+          }
+          if in.Err() != nil {
+            logger.Info().
+              Str("name", args[0]).
+              Int("key", int(key)).
+              Str("error", fmt.Sprint(in.Err())).
+              Msg("Encountered an error while reading from STDIN")
+            os.Exit(ExitStatusArgumentStdin)
+          }
+
+        } else if len(args) == 2 {
+          logger.Info().
+            Str("name", args[0]).
+            Int("key", int(key)).
+            Str("mechanism", "argument").
+            Msg("Preparing write operation")
+          messages = append(messages, args[1])
+        }
+
+        if len(messages) > 0 {
+          logger.Info().
+            Str("name", args[0]).
+            Int("key", int(key)).
+            Int("count", len(messages)).
+            Msg("Performing write operation")
+
+          // we are performing a write operations against
+          // message slice
+          for _, m := range messages {
+            logger.Debug().
+              Str("name", args[0]).
+              Int("key", int(key)).
+              Str("payload", m).
+              Msg("Write message to queue")
+
+            err := mq.SendString(m, 1, 0)
             if err != nil {
               logger.Error().
                 Str("name", args[0]).
                 Int("key", int(key)).
-                Str("error", err.Error()).
-                Msg("Failed to delete queue")
-              os.Exit(ExitStatusSysv)
+                Str("payload", m).
+                Msg("Failed to send message")
+              os.Exit(ExitStatusSysvWrite)
             }
-            logger.Info().
-              Str("name", args[0]).
-              Int("key", int(key)).
-              Msg("Queue deleted")
+          }
 
-            path := seedFile(args[0])
-            err = os.Remove(path)
-            if err != nil {
-              logger.Error().
-                Str("name", args[0]).
-                Int("key", int(key)).
-                Str("error", err.Error()).
-                Msg("Failed to delete seed file")
-              os.Exit(ExitStatusSysv)
-            }
-            logger.Info().
-              Str("name", args[0]).
-              Int("key", int(key)).
-              Str("path", path).
-              Msg("Deleted seed file")
+        } else if len(args) == 1 {
 
-          }()
-
-        } else if fcount {
-          // Performing queue count
+          // otherwise we are performing a read
+          // operation
           logger.Info().
             Str("name", args[0]).
             Int("key", int(key)).
-            Msg("Performing count operation")
+            Msg("Performing read operation")
 
-          count, err := mq.Count()
-          if err != nil {
-            logger.Error().
-              Str("name", args[0]).
-              Int("key", int(key)).
-              Str("error", err.Error()).
-              Msg("Failed to get queue count")
-            os.Exit(ExitStatusSysv)
-          }
-
-          // write count to stdout
-          fmt.Println(count)
-
-        } else {
-          // otherwise, determine if read or write operation
-          // against queue
-          var messages []string
-
-          stat, _ := os.Stdin.Stat()
-          if (stat.Mode() & os.ModeCharDevice) == 0 {
+          if fdelete {
             logger.Info().
               Str("name", args[0]).
               Int("key", int(key)).
-              Str("mechanism", "stdin").
-              Msg("Preparing write operation")
+              Msg("Signal queue deletion")
 
-
-            in := bufio.NewScanner(os.Stdin)
-            for in.Scan() {
-              message := strings.TrimSpace(in.Text())
-              messages = append(messages, message)
-              logger.Info().
-                Str("name", args[0]).
-                Int("key", int(key)).
-                Str("line", message).
-                Msg("Read from STDIN")
-            }
-            if in.Err() != nil {
-              logger.Info().
-                Str("name", args[0]).
-                Int("key", int(key)).
-                Str("error", fmt.Sprint(in.Err())).
-                Msg("Encountered an error while reading from STDIN")
-            }
-          } else if len(args) == 2 {
-              logger.Info().
-                Str("name", args[0]).
-                Int("key", int(key)).
-                Str("mechanism", "argument").
-                Msg("Preparing write operation")
-              messages = append(messages, args[1])
-          }
-
-          if len(messages) > 0 {
-            // we are performing a write operations against
-            // message slice
-            for _, m := range messages {
-              logger.Info().
-                Str("name", args[0]).
-                Int("key", int(key)).
-                Str("message", m).
-                Msg("Performing write operation")
-
-              err := mq.SendString(m, 1, 0)
+            // if delete flag has been specified, defer deltion
+            defer func() {
+              err := mq.Destroy()
               if err != nil {
                 logger.Error().
                   Str("name", args[0]).
                   Int("key", int(key)).
-                  Str("message", m).
-                  Msg("Failed to send message")
-                os.Exit(ExitStatusSysvWrite)
+                  Str("error", err.Error()).
+                  Msg("Failed to delete queue")
+                os.Exit(ExitStatusSysvDelete)
               }
-            }
+              logger.Info().
+                Str("name", args[0]).
+                Int("key", int(key)).
+                Msg("Queue deleted")
 
-          } else if len(args) == 1 {
+              path := seedFile(args[0])
+              err = os.Remove(path)
+              if err != nil {
+                logger.Error().
+                  Str("name", args[0]).
+                  Int("key", int(key)).
+                  Str("error", err.Error()).
+                  Msg("Failed to delete seed file")
+                os.Exit(ExitStatusSysvDelete)
+              }
+              logger.Info().
+                Str("name", args[0]).
+                Int("key", int(key)).
+                Str("path", path).
+                Msg("Deleted seed file")
 
-            // otherwise we are performing a dequeue'ing
-            // operation
+            }()
+
+          } else if fcount {
+            // Performing queue count
             logger.Info().
               Str("name", args[0]).
               Int("key", int(key)).
-              Msg("Performing a dequeue operation")
+              Msg("Performing count operation")
+
+            count, err := mq.Count()
+            if err != nil {
+              logger.Error().
+                Str("name", args[0]).
+                Int("key", int(key)).
+                Str("error", err.Error()).
+                Msg("Failed to get queue count")
+              os.Exit(ExitStatusSysvCount)
+            }
+
+            // write count to stdout
+            fmt.Println(count)
+
+          } else {
+            // Performing queue count
+            logger.Info().
+              Str("name", args[0]).
+              Int("key", int(key)).
+              Msg("Performing dequeue operation")
 
             var count uint64 = 1
             if fdump {
               // if dump has been passed we dump all messages
               // to stdout and delete queue
+              logger.Info().
+                Str("name", args[0]).
+                Int("key", int(key)).
+                Msg("Dumping queue")
+
               count, err = mq.Count()
               if err != nil {
                 logger.Error().
@@ -229,9 +263,14 @@ func main() {
                   Int("key", int(key)).
                   Str("error", err.Error()).
                   Msg("Failed to get queue count")
-                os.Exit(ExitStatusSysv)
+                os.Exit(ExitStatusSysvCount)
               }
             }
+            logger.Info().
+              Str("name", args[0]).
+              Int("key", int(key)).
+              Int("size", int(count)).
+              Msg("Dequeue count")
 
             for counter := 0; counter < int(count); counter++ {
               message, mtype, err := mq.ReceiveString(1, 0)
@@ -241,26 +280,33 @@ func main() {
                   Int("key", int(key)).
                   Int("type", mtype).
                   Str("error", err.Error()).
+                  Int("size", int(count)).
                   Msg("Failed to read message")
                 os.Exit(ExitStatusSysvRead)
               }
+              logger.Debug().
+                Str("name", args[0]).
+                Int("key", int(key)).
+                Int("size", int(count)).
+                Int("counter", counter).
+                Str("payload", message).
+                Msg("Dequeue message")
 
               // write message to stdout
               fmt.Println(message)
             }
-
-          } else {
-            // log wasted arguments - this can be useful when
-            // interacting with the binary from a shell environment
-            logger.Error().
-              Str("name", args[0]).
-              Int("key", int(key)).
-              Str("args", fmt.Sprint(args)).
-              Msg("Unexpected arguments")
-            os.Exit(ExitStatusArgument)
           }
-        }
 
+        } else {
+          // log wasted arguments - this can be useful when
+          // interacting with the binary from a shell environment
+          logger.Error().
+            Str("name", args[0]).
+            Int("key", int(key)).
+            Str("args", fmt.Sprint(args)).
+            Msg("Unexpected arguments")
+          os.Exit(ExitStatusArgument)
+        }
 
       } else {
         // if no stdin and no arguments then we display our help message
