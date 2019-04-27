@@ -26,7 +26,7 @@ func Logger(trace string) zerolog.Logger {
 
   // return json logger unless the env LOGGEr=true exists
   // at the time of call
-  v, ok := os.LookupEnv("LOGGER"); if ok && v == "true" {
+  v, ok := os.LookupEnv("LOGMQ"); if ok && v == "true" {
     return zerolog.
       New(os.Stderr).
       With().
