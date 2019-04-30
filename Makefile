@@ -57,11 +57,25 @@ release:
 		--tag $(TAG) \
 		--name $(TAG)
 
+	github-release release --draft \
+		--user $(ORG) \
+		--repo $(REPO) \
+		--tag latest \
+		--name $(TAG)
+
 	ls ./release/* | xargs -n1 basename | xargs -n1 -I{} github-release upload \
 		--replace \
 		--user $(ORG) \
 		--repo $(REPO) \
 		--tag $(TAG) \
+		--name {} \
+    --file ./release/{}
+
+	ls ./release/* | xargs -n1 basename | xargs -n1 -I{} github-release upload \
+		--replace \
+		--user $(ORG) \
+		--repo $(REPO) \
+		--tag latest \
 		--name {} \
     --file ./release/{}
 
@@ -71,6 +85,11 @@ publish:
 		--repo $(REPO) \
 		--tag $(TAG) \
 		--name $(TAG)
+	github-release edit \
+		--user $(ORG) \
+		--repo $(REPO) \
+		--tag $(TAG) \
+		--name latest
 
 test:
 	vgo build -v -o ./build/mq ./cmd/mq.go
