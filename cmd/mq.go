@@ -205,18 +205,23 @@ func main() {
               path := seedFile(args[0])
               err = os.Remove(path)
               if err != nil {
-                logger.Error().
+                logger.Warn().
                   Str("name", args[0]).
                   Int("key", int(key)).
                   Str("error", err.Error()).
                   Msg("Failed to delete seed file")
-                os.Exit(ExitStatusSysvDelete)
+
+              } else {
+                // failure to delete message queue shouldn't
+                // result in termination of process with error
+                // code, since file is empty and can only effect
+                // inode count
+                logger.Info().
+                  Str("name", args[0]).
+                  Int("key", int(key)).
+                  Str("path", path).
+                  Msg("Deleted seed file")
               }
-              logger.Info().
-                Str("name", args[0]).
-                Int("key", int(key)).
-                Str("path", path).
-                Msg("Deleted seed file")
 
             }()
 
